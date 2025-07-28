@@ -3,10 +3,13 @@ import torchvision.transforms.functional as TF
 from ultralytics import YOLO
 from ultralytics.nn.tasks import DetectionModel
 from ultralytics.utils.ops import non_max_suppression, scale_boxes
+from ultralytics.data.augment import LetterBox
 from ultralytics.engine.predictor import BasePredictor
 from ultralytics.engine.results import Results
 from model.Feature_Flow import Flow_estimation
 from model.Attention import MultiFrameAttention
+from PIL import Image
+import numpy as np
 
 class CustomForward(DetectionModel):
     def run_up_to(self, x, stop_layer):
@@ -67,25 +70,18 @@ class FGFAModel(torch.nn.Module):
         preds = self.model.continue_forward(fused, skips, start_layer=5)
         return preds
 
-class CustomYOLO(YOLO):
+class CustomYOLO(FGFAModel):
     def __init__(self, yolo_path, combined_model_path=None, device='cpu'):
         super().__init__(yolo_path)
-        
-        # Load your FGFAModel
-        self.fgfa_model = FGFAModel(yolo_path).to(device)
+        self.to(device)
 
-        # Load weights for FGFAModel if combined_model_path is provided
         if combined_model_path:
             checkpoint = torch.load(combined_model_path, map_location=device)
-            # Load state_dict into the internal components of fgfa_model
-            self.fgfa_model.model.load_state_dict(checkpoint['model_state_dict']) # The DetectionModel part
-            self.fgfa_model.flow.load_state_dict(checkpoint['flow_model_state_dict'])
-            self.fgfa_model.mfa.load_state_dict(checkpoint['mfa_state_dict'])
+            self.load_state_dict(checkpoint['model_state_dict']) 
             print(f"Loaded combined model from epoch {checkpoint['epoch']} with validation loss: {checkpoint['val_loss']:.4f}")
 
-        # Set names property from the underlying YOLO model (assuming it's consistent)
-        self.names = self.fgfa_model._original_detection_model.names 
-        self.device = device # Set the device for the CustomYOLO instance
+        self.names = self._original_detection_model.names 
+        self.device = device
 
     @torch.no_grad()
     def predict(self, source, stream=False, **kwargs):
@@ -104,13 +100,14 @@ class CustomYOLO(YOLO):
         if not (isinstance(source, list) and len(source) == 3):
             raise ValueError("For CustomYOLO, 'source' must be a list containing 3 image arrays (prev, current, next).")
         
-        pp = BasePredictor(overrides={**self.overrides, **kwargs, 'imgsz': kwargs.get('imgsz', 640)})
-        pp.setup_model(model=self.fgfa_model._original_detection_model, verbose=False) 
+        imgsz = kwargs.get('imgsz', 640)
+        kwargs['imgsz'] = imgsz       
+        pp = BasePredictor(overrides=kwargs)
+        pp.setup_model(model=self._original_detection_model, verbose=False) 
+        pp.setup_source(source)
         
         processed_imgs = []
         for img in source:
-            # BasePredictor.preprocess expects a list of images, so [img]
-            # It returns a tensor of shape (1, 3, H, W) for a single image input
             processed_img_tensor = pp.preprocess([img]).squeeze(0) # Remove batch dim (1,3,H,W) -> (3,H,W)
             processed_imgs.append(processed_img_tensor)
 
@@ -118,44 +115,30 @@ class CustomYOLO(YOLO):
         imgs_triplet_tensor = torch.stack(processed_imgs, dim=0).unsqueeze(0).to(self.device)
 
         # Pass through your custom FGFAModel
-        raw_predictions = self.fgfa_model(imgs_triplet_tensor) # FGFAModel's forward returns raw YOLO preds
-        
-        conf_thres = kwargs.get('conf', 0.25)
-        iou_thres = kwargs.get('iou', 0.7)
-        classes = kwargs.get('classes', None)
-        agnostic_nms = kwargs.get('agnostic_nms', False)
-        max_det = kwargs.get('max_det', 300)
-
-        if isinstance(raw_predictions, tuple):
-             processed_raw_preds = raw_predictions[0]
-        else:
-             processed_raw_preds = raw_predictions
-
+        print(f"DEBUG: imgs_triplet_tensor shape before forward: {imgs_triplet_tensor.shape}")
+        raw_predictions = self(imgs_triplet_tensor) # FGFAModel's forward returns raw YOLO preds
+    
         # Apply NMS
-        detections = non_max_suppression(
-            processed_raw_preds,
-            conf_thres,
-            iou_thres,
-            classes,
-            agnostic_nms,
-            max_det=max_det
-        )
+        detections = non_max_suppression(raw_predictions)
 
         # Post-process results into ultralytics.engine.results.Results objects
         results = []
+        print(f"DEBUG: Original middle image shape (source[1].shape): {source[1].shape}")
         for i, det in enumerate(detections): # Should be one `det` for one triplet
             if det is None or det.shape[0] == 0:
                 results.append(Results(source[i], path=None, names=self.names, boxes=None))
                 continue
 
             # Scale boxes back to original image size
-            # `source[i].shape[:2]` gives (H, W) of original image
-            # `imgs_triplet_tensor.shape[2:]` gives (H, W) of preprocessed images
+            print(f"DEBUG: Boxes BEFORE scaling (det[:, :4]):\n{det[:, :4]}")
+            
+            proc_h, proc_w = imgs_triplet_tensor.shape[-2], imgs_triplet_tensor.shape[-1]
             det[:, :4] = scale_boxes(
-                imgs_triplet_tensor.shape[2:], # shape of preprocessed image (H, W)
-                det[:, :4],                   # boxes
-                source[i].shape[:2]           # original image shape (H, W)
+                (proc_h, proc_w),               # now just (640, 640)
+                det[:, :4],
+                source[1].shape[:2]             # original (1080, 1920)
             )
+            print(f"DEBUG: Boxes AFTER scaling (det[:, :4]):\n{det[:, :4]}")
 
             # Create Results object for the current (middle) frame
             # Assuming you want detections for the middle frame (source[1])

@@ -78,7 +78,7 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=0, collate_fn=collate_fn)
 
     # 3) Setup Optimizer and Loss Function
-    opt = torch.optim.Adam(fgfa_model.parameters(), lr=5e-4)
+    opt = torch.optim.Adam(fgfa_model.parameters(), lr=1e-4)
 
     hyp = get_cfg(DEFAULT_CFG_PATH)
     if not all(hasattr(hyp, attr) for attr in ['box', 'cls', 'dfl']):
@@ -96,9 +96,9 @@ def train():
     best_epoch = -1
     epoch_loss = []
     val_epoch_loss = []
-    num_epochs = 30
+    num_epochs = 40
     warmup_epochs = 10
-    initial_lr = 5e-4
+    initial_lr = 1e-4
 
     for epoch in range(num_epochs):
         # --- Learning Rate Warmup ---
@@ -168,7 +168,7 @@ def train():
                 'model_state_dict': fgfa_model.state_dict(),
                 'optimizer_state_dict': opt.state_dict(),
                 'val_loss': best_val_loss,
-            }, "yolo_fgfa_v16_basev4.pt")
+            }, "yolo_fgfa_v18_basev4.pt")
             print(f"Saved best model at Epoch {epoch+1} with validation loss: {best_val_loss:.4f}")
 
         # Update learning rate scheduler only after warm-up
