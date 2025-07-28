@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['Birds-Ibis', 'Birds-Other']
+
+roboflow:
+  workspace: vri-ggnni
+  project: triplet_birds
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/vri-ggnni/triplet_birds/dataset/3
