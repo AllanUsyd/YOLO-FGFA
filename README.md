@@ -15,8 +15,13 @@ Once you’ve cloned this repo, just:
     conda activate yolofgfa
 
 ## Run Demo
+   ```bash
+   python detect.py
+   ```
 
-python detect.py
-
-| ![Result 1](assets/v18_loss.png) | ![Result 2](assets/demo_result.PNG) |
-|:-----------------------------:|:-----------------------------:|
+<p float="left">
+  <!-- make the first image 60% of the width -->
+  <img src="assets/v18_loss.png" width="60%" />
+  <!-- make the second one 40% -->
+  <img src="assets/demo_result.PNG" width="40%" />
+</p>
