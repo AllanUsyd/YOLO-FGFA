@@ -21,7 +21,7 @@ Once you’ve cloned this repo, just:
 
 <p float="left">
   <!-- make the first image 60% of the width -->
-  <img src="assets/v18_loss.png" width="60%" />
+  <img src="assets/v18_loss.png" width="54%" />
   <!-- make the second one 40% -->
-  <img src="assets/demo_result.PNG" width="40%" />
+  <img src="assets/demo_result.PNG" width="45%" />
 </p>
