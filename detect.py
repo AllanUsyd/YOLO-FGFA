@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # It will internally load FGFAModel and its components
     model = CustomYOLO(
         yolo_path=r'demo/yolo_ibis_4.pt',
-        combined_model_path=r"yolo_fgfa_v18_basev4.pt",
+        combined_model_path=r"demo/yolo_fgfa_v18_basev4.pt",
         device=device
     )
     model.eval() # Set the entire wrapper model to eval mode
@@ -65,6 +65,4 @@ if __name__ == "__main__":
                 # To show each image with detections immediately:
                 res.show() # This will open a new window for each image
 
-    # print("\nAll triplets processed.")
-    # # If you want to show all plotted images at the end:
-    # plt.show()
+    print("\nAll triplets processed.")
